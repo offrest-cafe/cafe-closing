@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="theme-color" content="#111111" />
+<title>카페 마감 체크리스트</title>
+<style>
+  :root {
+    --red: #e63946;
+    --red-dark: #b5212d;
+    --blue: #2563eb;
+    --blue-dark: #1e40af;
+    --bg: #0f0f10;
+    --card: #1a1a1d;
+    --text: #f4f4f5;
+    --muted: #8a8a92;
+    --section: #2a2a2e;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 16px 14px 120px;
+  }
+  header {
+    position: sticky; top: 0; z-index: 10;
+    background: var(--bg);
+    padding: 14px 0 10px;
+    border-bottom: 1px solid #222;
+  }
+  h1 {
+    font-size: 22px;
+    margin: 0 0 6px;
+    letter-spacing: -0.5px;
+  }
+  .meta {
+    display: flex; justify-content: space-between; align-items: center;
+    color: var(--muted); font-size: 13px;
+  }
+  .meta .progress {
+    font-weight: 600; color: var(--text);
+  }
+  .section-title {
+    margin: 22px 0 10px;
+    padding: 8px 12px;
+    background: var(--section);
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #d4d4d8;
+    letter-spacing: 0.3px;
+  }
+  .task {
+    display: flex; align-items: center;
+    width: 100%;
+    margin: 8px 0;
+    padding: 14px 16px;
+    min-height: 56px;
+    border: 3px solid var(--red-dark);
+    background: var(--red);
+    color: #fff;
+    border-radius: 12px;
+    font-size: 15.5px;
+    line-height: 1.45;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, transform 0.08s;
+    white-space: pre-wrap;
+    word-break: keep-all;
+  }
+  .task:active { transform: scale(0.985); }
+  .task.done {
+    background: var(--blue);
+    border-color: var(--blue-dark);
+    text-decoration: line-through;
+    opacity: 0.9;
+  }
+  .status {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+    background: rgba(15,15,16,0.95);
+    border-top: 1px solid #222;
+    font-size: 12px;
+    color: var(--muted);
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 8px;
+  }
+  .status .dot {
+    display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    background: #6b7280; margin-right: 6px; vertical-align: middle;
+  }
+  .status.online .dot { background: #22c55e; }
+  .status.offline .dot { background: #ef4444; }
+  button.reset {
+    background: #27272a; color: #e4e4e7; border: 1px solid #3f3f46;
+    padding: 8px 12px; border-radius: 8px; font-size: 12px;
+  }
+  .note {
+    padding: 14px; margin: 14px 0; background: #fff3cd; color: #664d03;
+    border-radius: 10px; font-size: 14px; line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>카페 마감 체크리스트</h1>
+    <div class="meta">
+      <span id="today">—</span>
+      <span class="progress"><span id="doneCount">0</span>/<span id="totalCount">0</span></span>
+    </div>
+  </header>
+
+  <div id="list"></div>
+</div>
+
+<div class="status" id="status">
+  <span><span class="dot"></span><span id="statusText">연결중...</span></span>
+  <button class="reset" id="resetBtn">전체 리셋</button>
+</div>
+
+<!-- Firebase -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  getDatabase, ref, onValue, set, update, get, child, serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+// ============================================
+// ▼▼▼ Firebase 설정값 여기에 붙여넣기 ▼▼▼
+// Firebase Console → 프로젝트 설정 → 웹 앱 → SDK 설정 및 구성 → 구성
+// ============================================
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com",
+  projectId: "YOUR_PROJECT",
+  storageBucket: "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "XXXXXXXX",
+  appId: "1:XXXX:web:XXXX"
+};
+// ============================================
+
+// 업무 목록 (섹션별)
+const SECTIONS = [
+  { title: "기본 업무", items: [
+    "행주, 물잔 들고 2층 점검",
+    "치아바타 폴딩 30분마다 2-3번 (마지막 냉장고)",
+    "테린느 랩핑 후 창고 (창고냉장고 재고 확인)",
+    "바스푼, 계량스푼 통 세척 후 뒤에 보관 → 마감 시 제자리",
+    "시럽 순서: 바닐라 · 헤이즐넛 · 아몬드 · 설탕",
+    "앞에서부터 설탕, 꿀, 올리브유 (부족하면 채우기)"
+  ]},
+  { title: "~ 7시 전", items: [
+    "어두워지면 주차장 출입구 불켜기"
+  ]},
+  { title: "7시 ~ 8시", items: [
+    "폐기 치아바타 확인",
+    "쓰레기 마감: 일반2, 종이, 플라스틱, 원두찌꺼기",
+    "일~목: 매장 옆 (뒷문 쓰레기도 같이)  /  금토: 뒷문 옆"
+  ]},
+  { title: "8시 50분 이후", items: [
+    "토스터기 / 전자레인지 닦기",
+    "치아바타용 집게, 보관통 세척 후 제자리",
+    "치아바타 트레이 닦기 (스테인레스, 식힘망) → 작은 트레이 옮기기, 큰 트레이는 뒷공간",
+    "작은 저울 미끄럼방지패드 세척",
+    "디카페인 도징컵 한 개 남기고 나머지 세척"
+  ]},
+  { title: "9시 이후", items: [
+    "음료 제조용 물통 세척",
+    "머신 한 개 마감"
+  ]},
+  { title: "9시 20분 이후", items: [
+    "얼음 스쿱, 통 세척",
+    "시럽 마감",
+    "바닐라시럽 플라스틱 컵 다시 붙이기"
+  ]},
+  { title: "9시 30분 이후", items: [
+    "블랜더 마감 (바닥면, 덮개)",
+    "저울 닦기, 충전 → 큰 저울 4개 / 작은 저울 1개",
+    "2층 물통, 쓰레기통 가져오기",
+    "원두 머신 붓으로 털고 닦기 (레벨링툴, 동그란 툴 설거지X / on 원두 기계 위쪽 돌리면 열림, 안쪽 붓질)"
+  ]},
+  { title: "9시 45분", items: [
+    "남겨둔 모든 기물 세척",
+    "머신 마감 ① 세척용 포터필터 + 세척가루 1t → 리모컨 ready 전환 후 왼쪽 톡",
+    "머신 마감 ② 끝나면 빼서 물 버리고 한 번 더 (가루 없이)",
+    "머신 마감 ③ 포터필터 없이 한 번 더",
+    "머신 마감 ④ 행주로 샤워스크린 살살 닦기",
+    "머신 배수구 청소",
+    "뜨건물 2개 스팀 꽂아두기"
+  ]},
+  { title: "10시 (마감)", items: [
+    "2층 마감: 충전기, 행주, 물컵, 쓰레기통 들고 올라가기",
+    "창문 3개 열기 (비 예보 있으면 열지 X)",
+    "2층 에어컨 끄기",
+    "테이블 조명 두 개 충전 🚨 선 다 풀기",
+    "길가쪽 블라인드 1/3 맞춰두기",
+    "화장실 확인 - 창문 닫고 불 끄기",
+    "자동문, 불 끄기",
+    "뒷문 잠그고 불 끄기 (손님 다 나가면!!)",
+    "메뉴판 끄기: 애플로고-잠자기",
+    "설거지 다 하면 배수구 망 교체",
+    "아이패드 화면 끄기",
+    "쇼케이스 조명 끄기 (가운데 버튼)",
+    "블랜더 끄기",
+    "1층 에어컨 끄기 (로스팅랩 에어컨도)",
+    "포스기 마감 (시재마감 X)",
+    "폐기 치아바타 버리기",
+    "노래 끄고 핸드폰 무선 충전 (손님 다 나가면!!)",
+    "모든 기물 제자리, 행주 꺼내두기 (스팀/바 2)",
+    "목/일요일: 커피린넨 · 핸들링행주 교체",
+    "금요일: 모아둔 행주 처리",
+    "머신 저울받침 2개 바에 말려두기",
+    "전자레인지 코드 뽑기",
+    "물통 2개 엎어두기",
+    "돌멩이 물주기",
+    "모든 불 끄기 (하나만 켜두기)",
+    "주차장 닫기",
+    "출입구 액자, 조명 안에 들여놓기",
+    "사장님께 퇴근 카톡"
+  ]}
+];
+
+// ---------- 리셋 경계 계산 (매일 오전 9시) ----------
+// 현재 시각이 속한 "9시 기준 하루"의 식별자를 반환 (YYYY-MM-DD).
+// 예: 4/15 08:30 → 4/14 / 4/15 09:01 → 4/15
+function currentResetKey() {
+  const now = new Date();
+  const d = new Date(now);
+  if (now.getHours() < 9) d.setDate(d.getDate() - 1);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function fmtTodayLabel() {
+  const d = new Date();
+  const days = ["일","월","화","수","목","금","토"];
+  return `${d.getMonth()+1}월 ${d.getDate()}일 (${days[d.getDay()]})`;
+}
+
+// ---------- 렌더 ----------
+const listEl = document.getElementById("list");
+const doneCountEl = document.getElementById("doneCount");
+const totalCountEl = document.getElementById("totalCount");
+const statusEl = document.getElementById("status");
+const statusText = document.getElementById("statusText");
+
+document.getElementById("today").textContent = fmtTodayLabel();
+
+const allIds = [];
+SECTIONS.forEach((sec, si) => {
+  const title = document.createElement("div");
+  title.className = "section-title";
+  title.textContent = sec.title;
+  listEl.appendChild(title);
+  sec.items.forEach((text, ii) => {
+    const id = `s${si}_i${ii}`;
+    allIds.push(id);
+    const btn = document.createElement("button");
+    btn.className = "task";
+    btn.id = id;
+    btn.textContent = text;
+    btn.addEventListener("click", () => toggleTask(id));
+    listEl.appendChild(btn);
+  });
+});
+totalCountEl.textContent = allIds.length;
+
+// ---------- Firebase 연결 ----------
+let db, tasksRef, metaRef;
+let state = {};
+let initialized = false;
+
+try {
+  const app = initializeApp(firebaseConfig);
+  db = getDatabase(app);
+  tasksRef = ref(db, "tasks");
+  metaRef = ref(db, "meta");
+
+  // 최초 로드: 리셋 체크
+  await checkAndResetIfNeeded();
+
+  // 실시간 구독
+  onValue(tasksRef, (snap) => {
+    state = snap.val() || {};
+    applyState();
+    statusEl.classList.add("online");
+    statusEl.classList.remove("offline");
+    statusText.textContent = "실시간 연결됨";
+    initialized = true;
+  }, (err) => {
+    statusEl.classList.add("offline");
+    statusText.textContent = "연결 오류: " + err.message;
+  });
+} catch (e) {
+  statusEl.classList.add("offline");
+  statusText.textContent = "Firebase 설정 필요";
+  showConfigNote();
+}
+
+function applyState() {
+  let done = 0;
+  allIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (state[id]) {
+      el.classList.add("done");
+      done++;
+    } else {
+      el.classList.remove("done");
+    }
+  });
+  doneCountEl.textContent = done;
+}
+
+async function toggleTask(id) {
+  const current = !!state[id];
+  state[id] = !current; // 즉시 반영 (낙관적 업데이트)
+  applyState();
+  try {
+    await update(tasksRef, { [id]: !current });
+  } catch (e) {
+    // 실패 시 되돌림
+    state[id] = current;
+    applyState();
+    alert("업데이트 실패: " + e.message);
+  }
+}
+
+async function checkAndResetIfNeeded() {
+  const key = currentResetKey();
+  const snap = await get(metaRef);
+  const meta = snap.val() || {};
+  if (meta.resetKey !== key) {
+    // 리셋
+    const cleared = {};
+    allIds.forEach(id => { cleared[id] = false; });
+    await set(tasksRef, cleared);
+    await set(metaRef, { resetKey: key, resetAt: serverTimestamp() });
+  }
+}
+
+// 창이 다시 보여질 때 (아침에 다시 열면) 리셋 체크
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && db) checkAndResetIfNeeded().catch(()=>{});
+});
+// 9시가 지나갈 때를 대비해 매 분마다 체크
+setInterval(() => { if (db) checkAndResetIfNeeded().catch(()=>{}); }, 60 * 1000);
+
+// 수동 리셋 버튼
+document.getElementById("resetBtn").addEventListener("click", async () => {
+  if (!db) return alert("Firebase 연결 필요");
+  if (!confirm("모든 항목을 리셋할까요?")) return;
+  const cleared = {};
+  allIds.forEach(id => { cleared[id] = false; });
+  await set(tasksRef, cleared);
+});
+
+function showConfigNote() {
+  const note = document.createElement("div");
+  note.className = "note";
+  note.innerHTML = `
+    <b>Firebase 설정이 필요합니다.</b><br>
+    index.html 파일의 <code>firebaseConfig</code> 부분을 본인 프로젝트 값으로 바꿔주세요.<br>
+    설정 전에는 리스트만 보이고 공유 저장은 동작하지 않습니다.
+  `;
+  listEl.parentNode.insertBefore(note, listEl);
+}
+</script>
+</body>
+</html>
