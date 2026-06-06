@@ -110,6 +110,16 @@
     padding: 14px; margin: 14px 0; background: #fff3cd; color: #664d03;
     border-radius: 10px; font-size: 14px; line-height: 1.5;
   }
+  .alert {
+    padding: 14px 16px; margin: 6px 0 12px;
+    background: #7f1d1d; color: #fff;
+    border: 2px solid #ef4444;
+    border-radius: 12px;
+    font-size: 15.5px; font-weight: 800; line-height: 1.5;
+    text-align: center;
+    letter-spacing: 0.2px;
+    box-shadow: 0 0 0 1px rgba(239,68,68,0.3);
+  }
 </style>
 </head>
 <body>
@@ -154,6 +164,14 @@ const firebaseConfig = {
 
 // 업무 목록 (섹션별)
 const SECTIONS = [
+  { title: "마감 10시 30분 전에 끝났을 때", items: [
+    "우유 재고 체크",
+    "생크림 재고 체크",
+    "구운몽 재고 체크",
+    "일회용잔 재고 체크",
+    "에이드 재고 체크",
+    "구운몽 베이스 체크"
+  ], note: "⚠️ 재고 없으면 반드시 퇴근 때 단톡에 보고!" },
   { title: "기본 업무", items: [
     "행주, 물잔 들고 2층 점검",
     "치아바타 폴딩 30분마다 2-3번 (마지막 냉장고)",
@@ -277,6 +295,12 @@ SECTIONS.forEach((sec, si) => {
     btn.addEventListener("click", () => toggleTask(id));
     listEl.appendChild(btn);
   });
+  if (sec.note) {
+    const alertEl = document.createElement("div");
+    alertEl.className = "alert";
+    alertEl.textContent = sec.note;
+    listEl.appendChild(alertEl);
+  }
 });
 totalCountEl.textContent = allIds.length;
 
